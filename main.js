@@ -1,7 +1,9 @@
+
 const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
 const { Command } = require('commander');
+const superagent = require('superagent');
 const program = new Command();
 
 // Налаштовуємо команду з параметрами
@@ -29,66 +31,58 @@ const { host, port, cache } = program.opts();
 console.log(`Starting server at http://${host}:${port}`);
 console.log(`Cache directory: ${cache}`);
 
+// Допоміжна функція для надсилання відповіді
+const sendResponse = (res, statusCode, contentType, message) => {
+  res.writeHead(statusCode, { 'Content-Type': contentType });
+  res.end(message);
+};
+
 // Створюємо HTTP сервер
 const server = http.createServer(async (req, res) => {
   const urlPath = req.url;
+  const code = urlPath.slice(1); // Витягуємо код з URL
+  const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
 
-  // Перевіряємо метод запиту
-  if (req.method === 'GET' && urlPath.startsWith('/')) {
-    const code = urlPath.slice(1); // Витягуємо код з URL (наприклад, "200" з "/200")
-    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
-    const notFoundImagePath = path.join(cache, '404.jpg');
-   
-    try {
-        const image = await fs.readFile(filePath);
-        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
-        res.end(image);
-    } catch (error) {
-      // Якщо файл не знайдено, повертаємо 404
-      /*res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end(`404 File not found for HTTP code: ${code}`);*/
-      const notFoundImage = await fs.readFile(notFoundImagePath);
-      res.writeHead(404, { 'Content-Type': 'image/jpeg' });
-      res.end(notFoundImage);
-    }
-  }  // Обробка PUT запитів
-  else if (req.method === 'PUT' && urlPath.startsWith('/')) {
-    const code = urlPath.slice(1); // Витягуємо код з URL
-    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
-    
-    let body = [];
-    req.on('data', chunk => {
-      body.push(chunk);
-    }).on('end', async () => {
-      const imageBuffer = Buffer.concat(body); // Об'єднуємо буфери
+  switch (req.method) {
+    case 'GET':
+        try {
+            const image = await fs.readFile(filePath);
+            sendResponse(res, 200, 'image/jpeg', image);
+          } catch (error) {
+            // Якщо файл не знайдено, просто повертаємо 404
+            sendResponse(res, 404, 'text/plain', '404 Not Found');
+          }
+      break;
+
+    case 'PUT':
       try {
-        await fs.writeFile(filePath, imageBuffer); // Записуємо зображення у кеш
-        res.writeHead(201, { 'Content-Type': 'text/plain' });
-        res.end('201 Image saved successfully');
+        await fs.access(filePath);
+        sendResponse(res, 200, 'text/plain', 'Image already exists in cache');
       } catch (error) {
-        console.error('Error writing file:', error);
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('500 Internal Server Error: Unable to save image');
+        // Якщо файл не існує, отримуємо зображення з http.cat
+        try {
+          const response = await superagent.get(`https://http.cat/${code}`);
+          const imageBuffer = response.body; // Отримуємо зображення
+          await fs.writeFile(filePath, imageBuffer); // Зберігаємо зображення у кеш
+          sendResponse(res, 201, 'text/plain', 'Image saved successfully');
+        } catch (error) {
+          sendResponse(res, 404, 'text/plain', '404 Not Found');
+        }
       }
-    });
-  } // Обробка DELETE запитів
-  else if (req.method === 'DELETE' && urlPath.startsWith('/')) {
-    const code = urlPath.slice(1); // Витягуємо код з URL
-    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
+      break;
 
-    try {
-      await fs.unlink(filePath); // Видаляємо файл
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('204 Image deleted successfully'); // Повертаємо 204 No Content
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('404 Not Found: Image does not exist'); // Повертаємо 404, якщо файл не знайдено
-    }
-  } else {
-    // Якщо метод не GET, PUT або DELETE, повертаємо 405 Method Not Allowed
-    res.writeHead(405, { 'Content-Type': 'text/plain' });
-    res.end('405 Method Not Allowed');
+    case 'DELETE':
+      try {
+        await fs.unlink(filePath); // Видаляємо файл з кешу
+        sendResponse(res, 200, 'text/plain', 'Image deleted successfully');
+      } catch (error) {
+        sendResponse(res, 404, 'text/plain', '404 File not found');
+      }
+      break;
+
+    default:
+      sendResponse(res, 405, 'text/plain', '405 Method Not Allowed');
+      break;
   }
 });
 
@@ -96,4 +90,3 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`Server is running at http://${host}:${port}`);
 });
-
