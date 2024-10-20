@@ -71,8 +71,22 @@ const server = http.createServer(async (req, res) => {
         res.end('500 Internal Server Error: Unable to save image');
       }
     });
+  } // Обробка DELETE запитів
+  else if (req.method === 'DELETE' && urlPath.startsWith('/')) {
+    const code = urlPath.slice(1); // Витягуємо код з URL
+    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
+
+    try {
+      await fs.unlink(filePath); // Видаляємо файл
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('204 Image deleted successfully'); // Повертаємо 204 No Content
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('404 Not Found: Image does not exist'); // Повертаємо 404, якщо файл не знайдено
+    }
   } else {
-    // Якщо метод не GET і не PUT, повертаємо 405 Method Not Allowed
+    // Якщо метод не GET, PUT або DELETE, повертаємо 405 Method Not Allowed
     res.writeHead(405, { 'Content-Type': 'text/plain' });
     res.end('405 Method Not Allowed');
   }
