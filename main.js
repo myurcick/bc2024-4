@@ -1,4 +1,6 @@
 const http = require('http');
+const fs = require('fs').promises;
+const path = require('path');
 const { Command } = require('commander');
 const program = new Command();
 
@@ -28,9 +30,32 @@ console.log(`Starting server at http://${host}:${port}`);
 console.log(`Cache directory: ${cache}`);
 
 // Створюємо HTTP сервер
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('My first server\n');
+const server = http.createServer(async (req, res) => {
+  const urlPath = req.url;
+
+  // Перевіряємо метод запиту
+  if (req.method === 'GET' && urlPath.startsWith('/')) {
+    const code = urlPath.slice(1); // Витягуємо код з URL (наприклад, "200" з "/200")
+    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
+    const notFoundImagePath = path.join(cache, '404.jpg');
+   
+    try {
+        const image = await fs.readFile(filePath);
+        res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+        res.end(image);
+    } catch (error) {
+      // Якщо файл не знайдено, повертаємо 404
+      /*res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end(`404 File not found for HTTP code: ${code}`);*/
+      const notFoundImage = await fs.readFile(notFoundImagePath);
+      res.writeHead(404, { 'Content-Type': 'image/jpeg' });
+      res.end(notFoundImage);
+    }
+  } else {
+    // Якщо метод не GET, повертаємо 405 Method Not Allowed
+    res.writeHead(405, { 'Content-Type': 'text/plain' });
+    res.end('405 Method not allowed');
+  }
 });
 
 // Запускаємо сервер на заданому хості та порту
