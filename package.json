@@ -1,0 +1,17 @@
+{
+    "name": "project-name",
+    "version": "1.0.0",
+    "description": "",
+    "main": "main.js",
+    "scripts": {
+        "start": "node main.js",
+        "dev": "nodemon index.js"
+    },
+    "dependencies": {
+        "commander": "^9.5.0",
+        "superagent": "^6.1.0"
+    },
+    "devDependencies": {
+        "nodemon": "^2.0.22"
+    }
+}
