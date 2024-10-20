@@ -51,10 +51,30 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404, { 'Content-Type': 'image/jpeg' });
       res.end(notFoundImage);
     }
+  }  // Обробка PUT запитів
+  else if (req.method === 'PUT' && urlPath.startsWith('/')) {
+    const code = urlPath.slice(1); // Витягуємо код з URL
+    const filePath = path.join(cache, `${code}.jpg`); // Формуємо шлях до файлу
+    
+    let body = [];
+    req.on('data', chunk => {
+      body.push(chunk);
+    }).on('end', async () => {
+      const imageBuffer = Buffer.concat(body); // Об'єднуємо буфери
+      try {
+        await fs.writeFile(filePath, imageBuffer); // Записуємо зображення у кеш
+        res.writeHead(201, { 'Content-Type': 'text/plain' });
+        res.end('201 Image saved successfully');
+      } catch (error) {
+        console.error('Error writing file:', error);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('500 Internal Server Error: Unable to save image');
+      }
+    });
   } else {
-    // Якщо метод не GET, повертаємо 405 Method Not Allowed
+    // Якщо метод не GET і не PUT, повертаємо 405 Method Not Allowed
     res.writeHead(405, { 'Content-Type': 'text/plain' });
-    res.end('405 Method not allowed');
+    res.end('405 Method Not Allowed');
   }
 });
 
